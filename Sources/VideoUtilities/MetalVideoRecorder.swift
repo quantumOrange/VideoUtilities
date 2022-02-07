@@ -10,7 +10,8 @@ import AVFoundation
 import Metal
 import UIKit
 
-actor MetalVideoRecorder {
+public actor MetalVideoRecorder {
+    
     private static let timescale = Int32(600)
     private var writer: AVAssetWriter
     private var input: AVAssetWriterInput
@@ -25,7 +26,7 @@ actor MetalVideoRecorder {
     
     let commandQueue: MTLCommandQueue
     
-    init?(size:CGSize, commandQueue:MTLCommandQueue,  output:URL? = nil){
+    public init?(size:CGSize, commandQueue:MTLCommandQueue,  output:URL? = nil){
         guard let output = output ?? Files.createVideosURL()  else { return nil }
         self.output = output
         self.commandQueue = commandQueue
@@ -66,7 +67,7 @@ actor MetalVideoRecorder {
     
     }
     
-    func start() {
+    public func start() {
         
         let options = [ kCVPixelBufferMetalCompatibilityKey: kCFBooleanTrue ]
        
@@ -92,18 +93,19 @@ actor MetalVideoRecorder {
         writer.printStatus()
     }
     
-    func addFrame(texture:MTLTexture, timestamp: Double) {
+    public func addFrame(texture:MTLTexture, timestamp: Double) {
         guard let pixelBuffer = pixelBuffer , let outputTextureCache = outputTextureCache else { return }
         
         var cvtexture: CVMetalTexture?
         
-        let result = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, outputTextureCache, pixelBuffer, nil, .bgra8Unorm, texture.width, texture.height, 0, &cvtexture)
+        _ = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, outputTextureCache, pixelBuffer, nil, .bgra8Unorm, texture.width, texture.height, 0, &cvtexture)
         
         guard let cvtexture = cvtexture,
               let targetTexture = CVMetalTextureGetTexture(cvtexture) else { return }
         
         
         if let commandBuffer = commandQueue.makeCommandBuffer() {
+            
             semaphore.wait()
             commandBuffer.addCompletedHandler { (_ commandBuffer) -> Void in
                 self.adaptor.append(pixelBuffer, withPresentationTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
@@ -118,7 +120,7 @@ actor MetalVideoRecorder {
         }
     }
     
-    func finishWritingAndSaveToPhotos() async  -> Bool {
+    public func finishWritingAndSaveToPhotos() async  -> Bool {
         let result =  await finishWritingVideo()
         
         switch result {
@@ -136,7 +138,7 @@ actor MetalVideoRecorder {
         }
     }
     
-    func finishWritingVideo()async  ->  Result<URL,Error> {
+    public func finishWritingVideo() async  ->  Result<URL,Error> {
         semaphore.wait()
         if writer.status == .writing {
             await writer.finishWriting()

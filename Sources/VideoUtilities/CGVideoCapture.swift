@@ -11,40 +11,43 @@ import CoreImage
 import CoreVideo
 import VideoToolbox
 
-class CGVideoCapture: ObservableObject {
-    var videoCapture:VideoCapture?
-    // 
-    @Published var image:CGImage?
+public final class CGVideoCapture: ObservableObject {
+    public var videoCapture:VideoCapture?
     
-    func start() {
+    @Published public var image:CGImage?
+    
+    public init(){}
+    
+    public func start() async {
+        
+        if(videoCapture == nil ) {
+            videoCapture =  await VideoCapture()
+        }
+            
+        guard let videoCapture =  videoCapture else { fatalError() }
+        
+        let result = await videoCapture.setUpAVCapture()
+        
+        switch result {
+            
+        case .success():
+            await videoCapture.startCapturing()
+        case .failure(let error):
+            print(error)
+        }
+        
         Task {
-            if(videoCapture == nil ) {
-                videoCapture =  await VideoCapture()
-            }
-                
-            guard let videoCapture =  videoCapture else { fatalError() }
-            
-            let result = await videoCapture.setUpAVCapture()
-            
-            switch result {
-                
-            case .success():
-                await videoCapture.startCapturing()
-            case .failure(let error):
-                print(error)
-            }
-            
-            await listenForImages()
+            await publishImages()
         }
     }
     
-    func stop() {
+    public func stop() {
         Task {
             await videoCapture?.stopCapturing()
         }
     }
     
-    func flipCamera() {
+    public func flipCamera() {
         Task {
             if let result = await videoCapture?.flipCamera() {
                 switch result {
@@ -57,21 +60,15 @@ class CGVideoCapture: ObservableObject {
         }
     }
     
-    private func listenForImages() async {
-        guard let videoCapture =  videoCapture else { fatalError()}
+    private func publishImages() async {
+        guard let videoCapture =  videoCapture else { fatalError() }
        
-        for await pixelBuffer in await videoCapture.imageStream {
-            // Create Core Graphics image placeholder.
-            var newImage: CGImage?
-
-            // Create a Core Graphics bitmap image from the pixel buffer.
-            VTCreateCGImageFromCVPixelBuffer(pixelBuffer, options: nil, imageOut: &newImage)
-
-            // Release the image buffer.
-            // CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
-            
-            image = newImage
+        let cgImages = await videoCapture
+                                .imageStream
+                                .map(createCGImage)
+                
+        for await cgImage in cgImages {
+            image = cgImage
         }
-        
     }
 }

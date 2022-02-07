@@ -14,7 +14,7 @@ public actor VideoCapture {
     
     private var sampleBufferDelegate:SampleBufferDelegate!
     
-     init() async {
+     public init() async {
         self.imageStream = AsyncStream(CVImageBuffer.self) { continuation in
             sampleBufferDelegate =  SampleBufferDelegate(continuation: continuation)
             self.continuation = continuation
@@ -58,12 +58,12 @@ public actor VideoCapture {
    public func setUpAVCapture() async  -> Result<Void,Error> {
        await withCheckedContinuation { (continuation: CheckedContinuation<Result<Void,Error>, Never>) in
          
-               do {
-                   try self.setUpAVCapture()
-                   continuation.resume(returning: Result.success(()))
-               } catch {
-                   continuation.resume(returning: Result.failure(error))
-               }
+           do {
+               try self.setUpAVCapture()
+               continuation.resume(returning: Result.success(()))
+           } catch {
+               continuation.resume(returning: Result.failure(error))
+           }
          
        }
    }
