@@ -11,7 +11,7 @@ import Metal
 import UIKit
 
 public actor MetalVideoRecorder {
-    
+    var n = 0
     private static let timescale = Int32(600)
     private var writer: AVAssetWriter
     private var input: AVAssetWriterInput
@@ -26,7 +26,9 @@ public actor MetalVideoRecorder {
     
     let commandQueue: MTLCommandQueue
     
-    public init?(size:CGSize, commandQueue:MTLCommandQueue,  output:URL? = nil){
+    var sessionStarted = false
+    
+    public init?(size:CGSize,  commandQueue:MTLCommandQueue,   output:URL? = nil){
         guard let output = output ?? Files.createVideosURL()  else { return nil }
         self.output = output
         self.commandQueue = commandQueue
@@ -59,12 +61,11 @@ public actor MetalVideoRecorder {
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
                 kCVPixelBufferWidthKey as String: size.width,
                 kCVPixelBufferHeightKey as String: size.height])
-        
+        // MTLDevice
         
         guard CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, commandQueue.device, nil, &outputTextureCache) == kCVReturnSuccess  else {
           return nil
         }
-    
     }
     
     public func start() {
@@ -87,15 +88,25 @@ public actor MetalVideoRecorder {
                 print(error)
             }
         }
-        
-        writer.startSession(atSourceTime: CMTime(seconds: ProcessInfo.processInfo.systemUptime, preferredTimescale: MetalVideoRecorder.timescale))
+        print(ProcessInfo.processInfo.systemUptime)
+       
         
         writer.printStatus()
     }
     
+    var lastTimestamp:Double?
+    
     public func addFrame(texture:MTLTexture, timestamp: Double) {
+        print("Time \(timestamp)");
+       // writer.
+        if(!sessionStarted){
+            writer.startSession(atSourceTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
+            sessionStarted = true
+        }
+        lastTimestamp = timestamp
         guard let pixelBuffer = pixelBuffer , let outputTextureCache = outputTextureCache else { return }
-        
+        semaphore.wait()
+       
         var cvtexture: CVMetalTexture?
         
         _ = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, outputTextureCache, pixelBuffer, nil, .bgra8Unorm, texture.width, texture.height, 0, &cvtexture)
@@ -106,17 +117,24 @@ public actor MetalVideoRecorder {
         
         if let commandBuffer = commandQueue.makeCommandBuffer() {
             
-            semaphore.wait()
+            let blitEncoder = commandBuffer.makeBlitCommandEncoder()
+            blitEncoder?.copy(from:texture, to: targetTexture)
+            blitEncoder?.endEncoding()
+            print("\(n)")
+            n += 1
             commandBuffer.addCompletedHandler { (_ commandBuffer) -> Void in
+                if let error = commandBuffer.error {
+                    print("*---!!---*")
+                    print(error)
+                }
                 self.adaptor.append(pixelBuffer, withPresentationTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
                 self.semaphore.signal()
             }
             
-            let blitEncoder = commandBuffer.makeBlitCommandEncoder()
-            blitEncoder?.copy(from:texture, to: targetTexture)
-            blitEncoder?.endEncoding()
-            
             commandBuffer.commit()
+        }
+        else {
+            self.semaphore.signal()
         }
     }
     
@@ -142,6 +160,9 @@ public actor MetalVideoRecorder {
         semaphore.wait()
         if writer.status == .writing {
             await writer.finishWriting()
+            //let time = lastTimestamp ?? 0.0
+           // writer.endSession(atSourceTime: CMTime(seconds: time, preferredTimescale: <#T##CMTimeScale#>))
+            //writer.
             semaphore.signal()
             return Result.success(output)
         }
@@ -156,4 +177,18 @@ public actor MetalVideoRecorder {
 
 enum VideoRecorderError:Error {
     case unknown
+}
+
+extension MTLCommandBuffer {
+    func commitAndComplete() async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            addCompletedHandler { (_ commandBuffer) -> Void in
+                if let err = commandBuffer.error {
+                    print(err)
+                }
+                continuation.resume()
+            }
+            commit()
+        }
+    }
 }
