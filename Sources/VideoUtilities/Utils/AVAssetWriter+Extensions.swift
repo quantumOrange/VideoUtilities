@@ -19,6 +19,7 @@ extension AVAssetWriter {
             print("completed")
         case .failed:
             print("failed")
+            print("error \(String(describing: error))")
         case .cancelled:
             print("cancelled")
         @unknown default:

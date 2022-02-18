@@ -21,21 +21,19 @@ public actor MetalVideoRecorder {
     private var output:URL
 
     private var size:CGSize;
-    
-    let semaphore = DispatchSemaphore(value: 1)
-    
+    private var stopped = false
     let commandQueue: MTLCommandQueue
     
     var sessionStarted = false
     
-    public init?(size:CGSize,  commandQueue:MTLCommandQueue,   output:URL? = nil){
+    public init?(size:CGSize,  commandQueue:MTLCommandQueue,   output:URL? = nil) async {
         guard let output = output ?? Files.createVideosURL()  else { return nil }
         self.output = output
         self.commandQueue = commandQueue
         self.size = size
         
-        let w = Int(size.width * 2)
-        let h = Int(size.height * 2)
+        let w = Int(size.width )
+        let h = Int(size.height )
         
         try? FileManager.default.removeItem(at:output)
         
@@ -61,7 +59,6 @@ public actor MetalVideoRecorder {
                 kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32ARGB,
                 kCVPixelBufferWidthKey as String: size.width,
                 kCVPixelBufferHeightKey as String: size.height])
-        // MTLDevice
         
         guard CVMetalTextureCacheCreate(kCFAllocatorDefault, nil, commandQueue.device, nil, &outputTextureCache) == kCVReturnSuccess  else {
           return nil
@@ -73,8 +70,8 @@ public actor MetalVideoRecorder {
         let options = [ kCVPixelBufferMetalCompatibilityKey: kCFBooleanTrue ]
        
         CVPixelBufferCreate(kCFAllocatorDefault,
-                            Int(size.width * 2),
-                            Int(size.height * 2),
+                            Int(size.width),
+                            Int(size.height),
                             kCVPixelFormatType_32BGRA,
                             options as CFDictionary,
                             &pixelBuffer)
@@ -96,25 +93,25 @@ public actor MetalVideoRecorder {
     
     var lastTimestamp:Double?
     
-    public func addFrame(texture:MTLTexture, timestamp: Double) {
-        print("Time \(timestamp)");
-       // writer.
+    public func addFrame(texture:MTLTexture, timestamp: Double)   {
+        guard stopped == false else { print("Already stopped recording. Frame at \(timestamp) will not be added. ") ; return }
+        guard writer.status == .writing else { print("Not writing - call start first"); return }
         if(!sessionStarted){
             writer.startSession(atSourceTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
             sessionStarted = true
         }
+        
         lastTimestamp = timestamp
         guard let pixelBuffer = pixelBuffer , let outputTextureCache = outputTextureCache else { return }
-        semaphore.wait()
-       
+      
         var cvtexture: CVMetalTexture?
         
         _ = CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, outputTextureCache, pixelBuffer, nil, .bgra8Unorm, texture.width, texture.height, 0, &cvtexture)
         
         guard let cvtexture = cvtexture,
-              let targetTexture = CVMetalTextureGetTexture(cvtexture) else { return }
-        
-        
+              let targetTexture = CVMetalTextureGetTexture(cvtexture) else {
+                  return }
+    
         if let commandBuffer = commandQueue.makeCommandBuffer() {
             
             let blitEncoder = commandBuffer.makeBlitCommandEncoder()
@@ -122,28 +119,36 @@ public actor MetalVideoRecorder {
             blitEncoder?.endEncoding()
             print("\(n)")
             n += 1
-            commandBuffer.addCompletedHandler { (_ commandBuffer) -> Void in
-                if let error = commandBuffer.error {
-                    print("*---!!---*")
-                    print(error)
-                }
-                self.adaptor.append(pixelBuffer, withPresentationTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
-                self.semaphore.signal()
-            }
             
             commandBuffer.commit()
+            commandBuffer.waitUntilCompleted()
+            
+            if let error = commandBuffer.error {
+                print(error)
+                return
+            }
+            
+            if adaptor.assetWriterInput.waitForReady() {
+                adaptor.append(pixelBuffer, withPresentationTime:CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
+            }
+            else {
+                print("Error: Timed-out waiting for assetWriterInput to be ready for data")
+            }
         }
-        else {
-            self.semaphore.signal()
-        }
+        
     }
     
-    public func finishWritingAndSaveToPhotos() async  -> Bool {
-        let result =  await finishWritingVideo()
+    public func finishWritingAndSaveToPhotos() async -> Bool {
+        guard stopped == false else { print("Finish already called."); return false}
+        stopped = true
         
+        let result =  await finishWritingVideo()
+      
         switch result {
         case .success(let url):
+            print("VIDEO RECORDING SUCCESS")
             if UIVideoAtPathIsCompatibleWithSavedPhotosAlbum(url.path) {
+                print("VIDEO RECORDING SAVED")
                 UISaveVideoAtPathToSavedPhotosAlbum(url.path,nil,nil,nil)
                 return true
             }
@@ -151,23 +156,19 @@ public actor MetalVideoRecorder {
                 print("ERROR: file format not supported!")
                 return false
             }
-        case .failure(_):
+        case .failure(let error):
+            print(error)
             return false
         }
     }
     
-    public func finishWritingVideo() async  ->  Result<URL,Error> {
-        semaphore.wait()
+    public func finishWritingVideo() async ->  Result<URL,Error> {
         if writer.status == .writing {
+            print("Finish writtting...")
             await writer.finishWriting()
-            //let time = lastTimestamp ?? 0.0
-           // writer.endSession(atSourceTime: CMTime(seconds: time, preferredTimescale: <#T##CMTimeScale#>))
-            //writer.
-            semaphore.signal()
             return Result.success(output)
         }
         else {
-            semaphore.signal()
             writer.printStatus()
             let error = writer.error ?? VideoRecorderError.unknown
             return Result.failure(error)
@@ -182,13 +183,33 @@ enum VideoRecorderError:Error {
 extension MTLCommandBuffer {
     func commitAndComplete() async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            addCompletedHandler { (_ commandBuffer) -> Void in
-                if let err = commandBuffer.error {
-                    print(err)
-                }
-                continuation.resume()
-            }
             commit()
+            waitUntilCompleted()
+            continuation.resume()
         }
+    }
+}
+
+extension  AVAssetWriterInput {
+    func waitForReady(timeOut:TimeInterval = 1.0)  -> Bool {
+        
+        let waitStep:TimeInterval = 0.0001
+        var waitTime:TimeInterval = 0.0
+        
+        while !isReadyForMoreMediaData {
+            Thread.sleep(forTimeInterval:waitStep)
+            
+            waitTime += waitStep
+            
+            if waitTime > timeOut {
+                return false
+            }
+        }
+        
+        if waitTime > 0 {
+            print("Slept for \(waitTime) waiting for asset writer input to be ready")
+        }
+        
+        return true
     }
 }
