@@ -10,7 +10,8 @@ import AVFoundation
 import Metal
 import UIKit
 
-public actor MetalVideoRecorder {
+
+public actor MetalRecorderActor {
     var n = 0
     private static let timescale = Int32(600)
     private var writer: AVAssetWriter
@@ -23,7 +24,7 @@ public actor MetalVideoRecorder {
     private var size:CGSize;
     private var stopped = false
     let commandQueue: MTLCommandQueue
-    
+    let inFlightSemaphore = DispatchSemaphore(value: 1)
     var sessionStarted = false
     
     public init?(size:CGSize,  commandQueue:MTLCommandQueue,   output:URL? = nil) async {
@@ -96,8 +97,9 @@ public actor MetalVideoRecorder {
     public func addFrame(texture:MTLTexture, timestamp: Double)   {
         guard stopped == false else { print("Already stopped recording. Frame at \(timestamp) will not be added. ") ; return }
         guard writer.status == .writing else { print("Not writing - call start first"); return }
+        _ = inFlightSemaphore.wait(timeout: DispatchTime.distantFuture)
         if(!sessionStarted){
-            writer.startSession(atSourceTime: CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
+            writer.startSession(atSourceTime: CMTime(seconds: timestamp, preferredTimescale: MetalRecorderActor.timescale))
             sessionStarted = true
         }
         
@@ -111,7 +113,7 @@ public actor MetalVideoRecorder {
         guard let cvtexture = cvtexture,
               let targetTexture = CVMetalTextureGetTexture(cvtexture) else {
                   return }
-    
+        
         if let commandBuffer = commandQueue.makeCommandBuffer() {
             
             let blitEncoder = commandBuffer.makeBlitCommandEncoder()
@@ -127,9 +129,11 @@ public actor MetalVideoRecorder {
                 print(error)
                 return
             }
+            inFlightSemaphore.signal()
+            
             
             if adaptor.assetWriterInput.waitForReady() {
-                adaptor.append(pixelBuffer, withPresentationTime:CMTime(seconds: timestamp, preferredTimescale: MetalVideoRecorder.timescale))
+                adaptor.append(pixelBuffer, withPresentationTime:CMTime(seconds: timestamp, preferredTimescale: MetalRecorderActor.timescale))
             }
             else {
                 print("Error: Timed-out waiting for assetWriterInput to be ready for data")
