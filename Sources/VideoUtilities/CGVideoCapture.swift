@@ -24,7 +24,7 @@ public final class CGVideoCapture: ObservableObject {
             videoCapture =  await VideoCapture()
         }
             
-        guard let videoCapture =  videoCapture else { fatalError() }
+        guard let videoCapture =  videoCapture else { return }
         
         let result = await videoCapture.setUpAVCapture()
         
@@ -61,7 +61,7 @@ public final class CGVideoCapture: ObservableObject {
     }
     
     private func publishImages() async {
-        guard let videoCapture =  videoCapture else { fatalError() }
+        guard let videoCapture =  videoCapture else { return }
        
         let cgImages = await videoCapture
                                 .imageStream
