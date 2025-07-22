@@ -46,6 +46,7 @@ public final class MetalRecorder {
             outputSettings: [
                 AVVideoWidthKey: w,
                 AVVideoHeightKey: h,
+               // AVVideoFr
                 AVVideoCodecKey: AVVideoCodecType.h264])
         
         input.expectsMediaDataInRealTime = true
