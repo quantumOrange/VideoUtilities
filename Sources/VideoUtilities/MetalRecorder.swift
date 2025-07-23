@@ -27,8 +27,11 @@ public final class MetalRecorder {
     var sessionStarted = false
     
     public init?(size:CGSize,  commandQueue:MTLCommandQueue,   output:URL? = nil) {
-        guard let output = output ?? Files.createVideosURL()  else { return nil }
-        self.output = output
+        //private let tempURL = FileManager.default.temporaryDirectory.appending(path: "tempVideo.mov")
+        //private let compositionURL = FileManager.default.temporaryDirectory.appending(path: "tempCompositionVideo.mov")
+        let tempURL = FileManager.default.temporaryDirectory.appending(path: "tempVideo.mov")
+       
+        self.output = output ?? tempURL
         self.commandQueue = commandQueue
         self.size = size
         
