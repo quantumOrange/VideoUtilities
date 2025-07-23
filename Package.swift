@@ -1,11 +1,12 @@
-// swift-tools-version:5.5
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+//git submodule add git@github.com:quantumOrange/VideoUtilities.git
 
 let package = Package(
     name: "VideoUtilities",
-    platforms: [.iOS(.v13)],
+    platforms: [.iOS(.v16)],
     products: [
         // Products define the executables and libraries a package produces, and make them visible to other packages.
         .library(
