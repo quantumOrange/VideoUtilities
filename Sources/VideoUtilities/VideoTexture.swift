@@ -9,6 +9,7 @@ import AVFoundation
 import Metal
 import MetalKit
 
+@MainActor
 public class VideoTexture {
     let url: URL
     private let playerItem: AVPlayerItem
@@ -16,6 +17,7 @@ public class VideoTexture {
     private var textureCache: CVMetalTextureCache?
     private let device: MTLDevice
     
+    @MainActor
     public init?(url: URL, device: MTLDevice) {
         self.url = url
         self.device = device

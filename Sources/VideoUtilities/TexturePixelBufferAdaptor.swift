@@ -9,15 +9,19 @@ import Foundation
 import AVFoundation
 import Metal
 
-class TexturePixelBufferAdaptor {
+public class TexturePixelBufferAdaptor {
     
     private var device:MTLDevice!
     private var textureCache: CVMetalTextureCache!
     
     private var outputPixelBuffer: CVPixelBuffer?
     private let commandQueue:MTLCommandQueue
-   
-    init(commandQueue:MTLCommandQueue) {
+    
+    
+    public let outputWidth:Int
+    public let outputHeight:Int
+    
+    public init(commandQueue:MTLCommandQueue, width:Int, height:Int) {
         self.commandQueue = commandQueue
         self.device = commandQueue.device
         
@@ -28,12 +32,45 @@ class TexturePixelBufferAdaptor {
         } else {
             textureCache = metalTextureCache
         }
+        
+        self.outputWidth = width
+        self.outputHeight = height
+        
+        assert(width>0)
+        assert(height>0)
+
+        let options = [ kCVPixelBufferMetalCompatibilityKey: kCFBooleanTrue ]
+        
+        CVPixelBufferCreate(kCFAllocatorDefault,
+                            width,
+                            height,
+                            kCVPixelFormatType_32BGRA,
+                            options as CFDictionary,
+                            &outputPixelBuffer)
+        
     }
     
+    /*
+    public func prepare(width:Int, height:Int) {
+        assert(width>0)
+        assert(height>0)
 
-    func makeTexture(from pixelBuffer: CVPixelBuffer, textureFormat: MTLPixelFormat) -> MTLTexture? {
+        let options = [ kCVPixelBufferMetalCompatibilityKey: kCFBooleanTrue ]
         
-       
+        CVPixelBufferCreate(kCFAllocatorDefault,
+                            width,
+                            height,
+                            kCVPixelFormatType_32BGRA,
+                            options as CFDictionary,
+                            &outputPixelBuffer)
+        
+        //outputWidth = width
+        //outputHeight = height
+    }
+    */
+
+    public func makeTexture(from pixelBuffer: CVPixelBuffer, textureFormat: MTLPixelFormat) -> MTLTexture? {
+        
         CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
         defer {
             CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly)
@@ -64,25 +101,7 @@ class TexturePixelBufferAdaptor {
         return nil
     }
     
-    var outputWidth:Int = -1
-    var outputHeight:Int = -1
     
-    public func prepare(width:Int, height:Int) {
-        assert(width>0)
-        assert(height>0)
-
-        let options = [ kCVPixelBufferMetalCompatibilityKey: kCFBooleanTrue ]
-        
-        CVPixelBufferCreate(kCFAllocatorDefault,
-                            width,
-                            height,
-                            kCVPixelFormatType_32BGRA,
-                            options as CFDictionary,
-                            &outputPixelBuffer)
-        
-        outputWidth = width
-        outputHeight = height
-    }
     
     enum TextureAdaptorError : Error {
         case notPrepared

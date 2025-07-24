@@ -10,7 +10,7 @@ import Combine
 import CoreImage
 import CoreVideo
 import VideoToolbox
-
+/*
 public final class CGVideoCapture: ObservableObject {
     public var videoCapture:VideoCapture?
     
@@ -70,5 +70,7 @@ public final class CGVideoCapture: ObservableObject {
         for await cgImage in cgImages {
             image = cgImage
         }
+        
     }
 }
+*/

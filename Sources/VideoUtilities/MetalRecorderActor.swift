@@ -10,7 +10,7 @@ import AVFoundation
 import Metal
 import UIKit
 
-
+/*
 public actor MetalRecorderActor {
     var n = 0
     private static let timescale = Int32(600)
@@ -179,6 +179,8 @@ public actor MetalRecorderActor {
         }
     }
 }
+
+*/
 
 enum VideoRecorderError:Error {
     case unknown

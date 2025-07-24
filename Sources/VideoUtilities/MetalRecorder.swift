@@ -30,7 +30,7 @@ public final class MetalRecorder {
         //private let tempURL = FileManager.default.temporaryDirectory.appending(path: "tempVideo.mov")
         //private let compositionURL = FileManager.default.temporaryDirectory.appending(path: "tempCompositionVideo.mov")
         let tempURL = FileManager.default.temporaryDirectory.appending(path: "tempVideo.mov")
-       
+      
         self.output = output ?? tempURL
         self.commandQueue = commandQueue
         self.size = size
@@ -38,9 +38,9 @@ public final class MetalRecorder {
         let w = Int(size.width )
         let h = Int(size.height )
         
-        try? FileManager.default.removeItem(at:output)
+        try? FileManager.default.removeItem(at:self.output)
         
-        guard let writer = try? AVAssetWriter(outputURL: output, fileType: AVFileType.mov) else { return nil }
+        guard let writer = try? AVAssetWriter(outputURL: self.output, fileType: AVFileType.mov) else { return nil }
         
         self.writer = writer
         

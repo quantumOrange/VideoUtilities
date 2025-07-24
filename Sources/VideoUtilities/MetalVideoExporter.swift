@@ -15,7 +15,6 @@ import VideoToolbox
 public protocol MetalVideoFrameProvider {
     func start()
     func nextFrame() -> (MTLTexture?,CMTime)
-    //var endTime:CMTime {get}
 }
 
 @available(iOS 17.0, *)
@@ -63,7 +62,7 @@ public actor MetalVideoExporter {
         self.frameProvider = frameProvider
         self.size = size
         
-        self.texturePixelBufferAdaptor = TexturePixelBufferAdaptor(commandQueue:commandQueue)
+        self.texturePixelBufferAdaptor = TexturePixelBufferAdaptor(commandQueue:commandQueue,width: Int(size.width), height: Int(size.height))
         let videoQueue = DispatchQueue(label: "VideoCaptureQueue")
         self.executor = Executor(queue:videoQueue)
         self.queue = videoQueue
@@ -214,7 +213,7 @@ public actor MetalVideoExporter {
         print("***********")
         print("*** write to file ***")
       
-        texturePixelBufferAdaptor.prepare(width:Int(size.width), height: Int(size.height))
+        //texturePixelBufferAdaptor.prepare(width:Int(size.width), height: Int(size.height))
         
         if let label = String(validatingUTF8: __dispatch_queue_get_label(nil)) {
             print("\(#function) on queue: \(label)")

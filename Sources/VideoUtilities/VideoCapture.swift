@@ -2,7 +2,7 @@ import AVFoundation
 import CoreVideo
 import UIKit
 import VideoToolbox
-
+/*
 public actor VideoCapture {
     
     enum VideoCaptureError: Error {
@@ -211,3 +211,4 @@ fileprivate final class SampleBufferDelegate: NSObject, AVCaptureVideoDataOutput
     }
 }
 
+*/
